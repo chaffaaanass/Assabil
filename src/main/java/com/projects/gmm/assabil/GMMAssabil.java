@@ -29,7 +29,9 @@ import java.util.List;
 
 public class GMMAssabil {
 
-    private static final int MAX_CLUSTERS = 25;
+    private static final int MAX_CLUSTERS_3_TONNES = 15;
+    private static final int MAX_CLUSTERS_5_TONNES = 10;
+    private static final double TRUCK_CAPACITY_3_TONNES = 3000.0;
     private static final double TRUCK_CAPACITY_5_TONNES = 5000.0;
 
     public static void main(String[] args) {
@@ -86,16 +88,17 @@ public class GMMAssabil {
 
             // Create and configure GMM
             EM gmm = new EM();
-            gmm.setNumClusters(Math.min(MAX_CLUSTERS, data.numInstances())); // Ensure clusters do not exceed number of rows
+            int totalClusters = MAX_CLUSTERS_3_TONNES + MAX_CLUSTERS_5_TONNES;
+            gmm.setNumClusters(Math.min(totalClusters, data.numInstances())); // Ensure clusters do not exceed number of rows
 
             // Train the model
             gmm.buildClusterer(data);
 
             // Prepare cluster information
             XYSeriesCollection dataset = new XYSeriesCollection();
-            XYSeries[] series = new XYSeries[Math.min(MAX_CLUSTERS, data.numInstances())];
+            XYSeries[] series = new XYSeries[totalClusters];
             Map<Integer, List<String>> clusterToDataMap = new HashMap<>();
-            double[] clusterWeights = new double[Math.min(MAX_CLUSTERS, data.numInstances())];
+            double[] clusterWeights = new double[totalClusters];
             List<UnassignedInstance> unassignedInstancesList = new ArrayList<>();
 
             // Initialize clusters
@@ -113,9 +116,10 @@ public class GMMAssabil {
                 double longitude = inst.value(1);
 
                 int cluster = gmm.clusterInstance(inst);
+                double maxCapacity = (cluster < MAX_CLUSTERS_3_TONNES) ? TRUCK_CAPACITY_3_TONNES : TRUCK_CAPACITY_5_TONNES;
                 double newClusterWeight = clusterWeights[cluster] + weight;
 
-                if (newClusterWeight <= TRUCK_CAPACITY_5_TONNES) {
+                if (newClusterWeight <= maxCapacity) {
                     series[cluster].add(latitude, longitude);
                     clusterToDataMap.get(cluster).add(String.format("Partner: %s, Latitude: %.6f, Longitude: %.6f, Weight: %.2f Kg", partnerNames.get(i), latitude, longitude, weight));
                     clusterWeights[cluster] = newClusterWeight;
@@ -136,7 +140,8 @@ public class GMMAssabil {
 
                 // Find the nearest cluster that can accommodate the weight
                 for (int i = 0; i < clusterWeights.length; i++) {
-                    if (clusterWeights[i] + weight <= TRUCK_CAPACITY_5_TONNES) {
+                    double maxCapacity = (i < MAX_CLUSTERS_3_TONNES) ? TRUCK_CAPACITY_3_TONNES : TRUCK_CAPACITY_5_TONNES;
+                    if (clusterWeights[i] + weight <= maxCapacity) {
                         double clusterLatitudeSum = 0.0;
                         double clusterLongitudeSum = 0.0;
                         int clusterSize = series[i].getItemCount();
@@ -223,6 +228,14 @@ public class GMMAssabil {
                             cell = row.createCell(0);
                             cell.setCellValue("Cluster " + (i + 1));
 
+                            String truckCapacity = (i < MAX_CLUSTERS_3_TONNES) ? "3 Tonnes" : "5 Tonnes";
+
+                            row = sheetOut.createRow(rowIndex++);
+                            cell = row.createCell(0);
+                            cell.setCellValue("Truck:");
+                            cell = row.createCell(1);
+                            cell.setCellValue(truckCapacity);
+
                             row = sheetOut.createRow(rowIndex++);
                             cell = row.createCell(0);
                             cell.setCellValue("Total Weight:");
@@ -292,4 +305,3 @@ public class GMMAssabil {
         }
     }
 }
-
